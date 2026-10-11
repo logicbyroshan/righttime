@@ -71,3 +71,14 @@ Do not silently reverse any decision recorded here.
   - Fake automated Wi-Fi triggers: Misleads user and violates requirements.
   - Omitting fields entirely: Would require breaking schema migrations in Phase 2.
 - **Consequences**: Seamless transition to Phase 2 native modules without database migration overhead.
+
+---
+
+## ADR-007: Feature Branching and PR Merge Workflow via GitHub CLI
+- **Date**: 2026-10-11
+- **Status**: Accepted
+- **Context**: Working directly on the `main` branch risks introducing untested regressions, lacks branch audit history, and does not leverage GitHub's review and pull request infrastructure.
+- **Decision**: All future tasks, features, bug fixes, and documentation updates must be developed on a dedicated task branch (`feature/*`, `fix/*`, `docs/*`, `chore/*`), pushed to remote, submitted as a Pull Request via GitHub CLI (`gh pr create`), and merged into `main` using `gh pr merge --merge --delete-branch`.
+- **Alternatives Considered**:
+  - Direct pushes to `main`: Faster for single developers, but bypasses PR audit trails and makes task rollbacks harder.
+- **Consequences**: Complete traceability of each change set via GitHub Pull Requests; `main` remains continuously releasable.

@@ -51,3 +51,25 @@ This file records meaningful engineering tasks executed on the repository.
   - Full directory inspection and verification.
 - **Known Follow-up**:
   - Maintain synchronization of memory files during subsequent tasks.
+
+---
+
+### Task: Add Mandatory Branching & GitHub PR Workflow Rule
+- **Date**: 2026-10-11
+- **Task**: Establish strict rule requiring all tasks to be executed on separate branches (`feature/*`, `fix/*`, `docs/*`, `chore/*`), pushed to remote, submitted as Pull Requests via GitHub CLI (`gh`), and merged into `main`.
+- **Reason**: User instruction to enforce isolated task branching and clean PR-based merges into `main`.
+- **Files/Areas Affected**:
+  - `AGENTS.md`: Added Section 8 detailing the step-by-step branching & PR protocol.
+  - `.agent-memory/CONVENTIONS.md`: Added branching & PR workflow to Git conventions.
+  - `.agent-memory/DECISIONS.md`: Added ADR-007.
+  - `.agent-memory/TASK_HISTORY.md`: Recorded task.
+  - `CHANGELOG.md`: Recorded workflow change.
+- **What Changed**:
+  - All future agent work must branch from `main`, push to origin, create PR via `gh pr create`, and merge via `gh pr merge`.
+- **Important Decisions**:
+  - ADR-007 (Feature Branching & GitHub PR Workflow)
+- **Testing Performed**:
+  - Verified `gh auth status` (authenticated as `logicbyroshan`).
+  - Executed this task via `docs/branching-and-pr-workflow` branch.
+- **Known Follow-up**:
+  - Submit and merge PR into `main`.

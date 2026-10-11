@@ -86,3 +86,12 @@
   `feat: ...`, `fix: ...`, `docs: ...`, `test: ...`, `refactor: ...`.
 - Never commit `.venv/`, `node_modules/`, `*.sqlite3`, `*.pyc`, `.expo/`, or credentials.
 - Keep remote `origin` tracking `https://github.com/logicbyroshan/righttime.git` main branch.
+- **Mandatory Branching & PR Workflow**:
+  - Never commit or push directly to `main`.
+  - Every task is executed on a dedicated branch (`feature/<name>`, `fix/<name>`, `docs/<name>`, `chore/<name>`).
+  - Push branch to origin: `git push -u origin <branch-name>`.
+  - Create Pull Request with GitHub CLI: `gh pr create --title "..." --body "..."`.
+  - Merge Pull Request into `main`: `gh pr merge --merge --delete-branch`.
+  - Switch back to `main`, pull latest changes: `git checkout main && git pull origin main`.
+  - Each subsequent task begins on a newly created separate branch.
+
