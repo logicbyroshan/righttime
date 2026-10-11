@@ -13,8 +13,12 @@ from apps.attendance.models import (
     BreakSession,
     AttendanceEvent,
     AttendanceCorrection,
+    PendingSuggestion,
 )
-from apps.attendance.serializers import AttendanceSessionSerializer
+from apps.attendance.serializers import (
+    AttendanceSessionSerializer,
+    PendingSuggestionSerializer,
+)
 from apps.activities.models import Activity, ActivityEntry
 from apps.activities.serializers import ActivitySerializer, ActivityEntrySerializer
 from apps.habits.models import Habit, HabitCompletion
@@ -65,6 +69,7 @@ class SyncView(APIView):
             'activity_entries': 0,
             'habits': 0,
             'habit_completions': 0,
+            'pending_suggestions': 0,
         }
 
         # 1. Activities upsert
@@ -149,6 +154,10 @@ class SyncView(APIView):
             is_incomplete = sess_data.get('is_incomplete', False)
             is_corrected = sess_data.get('is_corrected', False)
             is_deleted = sess_data.get('is_deleted', False)
+            source = sess_data.get('source', 'MANUAL')
+            detected_at = parse_dt(sess_data.get('detected_at'))
+            confirmed_at = parse_dt(sess_data.get('confirmed_at'))
+            network_match = sess_data.get('network_match', True)
 
             session, created = AttendanceSession.objects.get_or_create(
                 id=s_id,
@@ -162,6 +171,10 @@ class SyncView(APIView):
                     'is_incomplete': is_incomplete,
                     'is_corrected': is_corrected,
                     'is_deleted': is_deleted,
+                    'source': source,
+                    'detected_at': detected_at,
+                    'confirmed_at': confirmed_at,
+                    'network_match': network_match,
                 }
             )
             if not created:
@@ -173,6 +186,12 @@ class SyncView(APIView):
                 session.is_incomplete = is_incomplete
                 session.is_corrected = is_corrected
                 session.is_deleted = is_deleted
+                if source != 'MANUAL':
+                    session.source = source
+                if detected_at:
+                    session.detected_at = detected_at
+                if confirmed_at:
+                    session.confirmed_at = confirmed_at
                 session.save()
             counts['attendance_sessions'] += 1
 
@@ -218,6 +237,10 @@ class SyncView(APIView):
             session = AttendanceSession.objects.filter(id=s_id, user=user).first()
             if not session:
                 continue
+            source = ev_data.get('source', 'MANUAL')
+            detected_at = parse_dt(ev_data.get('detected_at'))
+            confirmed_at = parse_dt(ev_data.get('confirmed_at'))
+            network_match = ev_data.get('network_match', True)
             AttendanceEvent.objects.get_or_create(
                 id=e_id,
                 user=user,
@@ -226,6 +249,10 @@ class SyncView(APIView):
                     'event_type': ev_data.get('event_type'),
                     'timestamp': parse_dt(ev_data.get('timestamp')) or timezone.now(),
                     'notes': ev_data.get('notes', ''),
+                    'source': source,
+                    'detected_at': detected_at,
+                    'confirmed_at': confirmed_at,
+                    'network_match': network_match,
                 }
             )
             counts['attendance_events'] += 1
@@ -316,6 +343,35 @@ class SyncView(APIView):
                 comp.save()
             counts['habit_completions'] += 1
 
+        # 9. Pending Suggestions upsert
+        for sugg_data in data.get('pending_suggestions', []):
+            sugg_id = sugg_data.get('id')
+            if not sugg_id:
+                continue
+            detected_at = parse_dt(sugg_data.get('detected_at')) or timezone.now()
+            confirmed_at = parse_dt(sugg_data.get('confirmed_at'))
+            sugg, created = PendingSuggestion.objects.get_or_create(
+                id=sugg_id,
+                user=user,
+                defaults={
+                    'event_type': sugg_data.get('event_type', 'ARRIVAL'),
+                    'detected_at': detected_at,
+                    'source': sugg_data.get('source', 'WIFI_AUTO'),
+                    'network_match': sugg_data.get('network_match', True),
+                    'status': sugg_data.get('status', 'PENDING'),
+                    'confirmed_at': confirmed_at,
+                    'notes': sugg_data.get('notes', ''),
+                    'is_deleted': sugg_data.get('is_deleted', False),
+                }
+            )
+            if not created:
+                sugg.status = sugg_data.get('status', sugg.status)
+                sugg.confirmed_at = confirmed_at or sugg.confirmed_at
+                sugg.notes = sugg_data.get('notes', sugg.notes)
+                sugg.is_deleted = sugg_data.get('is_deleted', sugg.is_deleted)
+                sugg.save()
+            counts['pending_suggestions'] += 1
+
         total_received = sum(counts.values())
 
         # Record SyncLog
@@ -336,6 +392,9 @@ class SyncView(APIView):
             server_changes = {
                 'attendance_sessions': AttendanceSessionSerializer(
                     AttendanceSession.objects.filter(user=user, updated_at__gt=last_sync_dt), many=True
+                ).data,
+                'pending_suggestions': PendingSuggestionSerializer(
+                    PendingSuggestion.objects.filter(user=user, updated_at__gt=last_sync_dt), many=True
                 ).data,
                 'activities': ActivitySerializer(
                     Activity.objects.filter(user=user, updated_at__gt=last_sync_dt), many=True

@@ -116,3 +116,107 @@ class AttendanceApiTests(TestCase):
         self.assertEqual(corr_resp.status_code, status.HTTP_200_OK)
         self.assertTrue(corr_resp.data['is_corrected'])
         self.assertEqual(len(corr_resp.data['corrections']), 2)  # end_time and notes
+
+    def test_pending_suggestion_lifecycle(self):
+        # 1. Create a pending arrival suggestion
+        sugg_id = str(uuid.uuid4())
+        resp = self.client.post('/api/v1/attendance/suggestions/', {
+            'id': sugg_id,
+            'event_type': 'ARRIVAL',
+            'detected_at': self.now.isoformat(),
+            'source': 'WIFI_AUTO',
+            'network_match': True,
+            'notes': 'Office-WiFi detected',
+        })
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(resp.data['status'], 'PENDING')
+
+        # 2. Confirm the suggestion
+        confirm_resp = self.client.post(f'/api/v1/attendance/suggestions/{sugg_id}/', {
+            'action': 'confirm',
+        })
+        self.assertEqual(confirm_resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(confirm_resp.data['status'], 'CONFIRMED')
+
+        # Verify an open attendance session was created with WIFI_SUGGESTION source
+        session = AttendanceSession.objects.filter(user=self.user, status='IN_PROGRESS').first()
+        self.assertIsNotNone(session)
+        self.assertEqual(session.source, 'WIFI_SUGGESTION')
+        self.assertEqual(session.network_match, True)
+
+        # 3. Attempting to confirm again must fail
+        dup_resp = self.client.post(f'/api/v1/attendance/suggestions/{sugg_id}/', {
+            'action': 'confirm',
+        })
+        self.assertEqual(dup_resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_departure_suggestion_blocks_when_break_open(self):
+        # 1. Create session and open break
+        self.client.post('/api/v1/attendance/events/', {
+            'event_type': 'CHECK_IN',
+            'timestamp': self.now.isoformat(),
+        })
+        self.client.post('/api/v1/attendance/events/', {
+            'event_type': 'START_BREAK',
+            'timestamp': (self.now + timedelta(hours=2)).isoformat(),
+        })
+
+        # 2. Create departure suggestion
+        dep_id = str(uuid.uuid4())
+        self.client.post('/api/v1/attendance/suggestions/', {
+            'id': dep_id,
+            'event_type': 'DEPARTURE',
+            'detected_at': (self.now + timedelta(hours=4)).isoformat(),
+            'source': 'WIFI_AUTO',
+        })
+
+        # 3. Confirming departure must fail because a break is open
+        fail_resp = self.client.post(f'/api/v1/attendance/suggestions/{dep_id}/', {
+            'action': 'confirm',
+        })
+        self.assertEqual(fail_resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('break is currently open', fail_resp.data['message'])
+
+        # 4. Dismiss suggestion instead
+        dismiss_resp = self.client.post(f'/api/v1/attendance/suggestions/{dep_id}/', {
+            'action': 'dismiss',
+            'reason': 'Still in office',
+        })
+        self.assertEqual(dismiss_resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(dismiss_resp.data['status'], 'DISMISSED')
+
+    def test_sync_with_suggestions_and_metadata(self):
+        sess_id = str(uuid.uuid4())
+        sugg_id = str(uuid.uuid4())
+
+        resp = self.client.post('/api/v1/sync/', {
+            'attendance_sessions': [{
+                'id': sess_id,
+                'status': 'IN_PROGRESS',
+                'start_time': self.now.isoformat(),
+                'work_date': '2026-10-10',
+                'notes': 'Sync test',
+                'source': 'WIFI_SUGGESTION',
+                'detected_at': self.now.isoformat(),
+                'confirmed_at': self.now.isoformat(),
+                'network_match': True,
+            }],
+            'pending_suggestions': [{
+                'id': sugg_id,
+                'event_type': 'ARRIVAL',
+                'detected_at': self.now.isoformat(),
+                'source': 'WIFI_AUTO',
+                'network_match': True,
+                'status': 'CONFIRMED',
+                'confirmed_at': self.now.isoformat(),
+                'notes': 'Arrived via Wi-Fi',
+            }]
+        }, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data['processed_counts']['attendance_sessions'], 1)
+        self.assertEqual(resp.data['processed_counts']['pending_suggestions'], 1)
+
+        # Verify persisted in database
+        sess = AttendanceSession.objects.filter(id=sess_id).first()
+        self.assertIsNotNone(sess)
+        self.assertEqual(sess.source, 'WIFI_SUGGESTION')

@@ -280,6 +280,9 @@ export default function AttendanceScreen() {
                         label={session.status}
                         color={session.status === 'COMPLETED' ? colors.primary : colors.warning}
                       />
+                      {session.source === 'WIFI_SUGGESTION' ? (
+                        <Badge label="WI-FI" color={colors.success} bgColor="#10B98120" />
+                      ) : null}
                       {session.is_corrected === 1 ? (
                         <Badge label="CORRECTED" color={colors.accent} bgColor="#6366F120" />
                       ) : null}

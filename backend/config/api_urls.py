@@ -5,6 +5,8 @@ from apps.attendance.views import (
     AttendanceSessionDetailView,
     ProcessAttendanceEventView,
     CorrectAttendanceSessionView,
+    PendingSuggestionListCreateView,
+    PendingSuggestionDetailView,
 )
 from apps.activities.views import (
     ActivityListCreateView,
@@ -32,6 +34,8 @@ urlpatterns = [
     path('attendance/<uuid:pk>/', AttendanceSessionDetailView.as_view(), name='api-attendance-detail'),
     path('attendance/events/', ProcessAttendanceEventView.as_view(), name='api-attendance-events'),
     path('attendance/<uuid:pk>/correct/', CorrectAttendanceSessionView.as_view(), name='api-attendance-correct'),
+    path('attendance/suggestions/', PendingSuggestionListCreateView.as_view(), name='api-attendance-suggestions-list'),
+    path('attendance/suggestions/<uuid:pk>/', PendingSuggestionDetailView.as_view(), name='api-attendance-suggestions-detail'),
 
     # Activities
     path('activities/', ActivityListCreateView.as_view(), name='api-activities-list'),

@@ -7,6 +7,32 @@ export type AttendanceEventType =
   | 'CHECK_OUT' 
   | 'CORRECTION';
 
+export type PendingSuggestionStatus = 
+  | 'PENDING' 
+  | 'CONFIRMED' 
+  | 'DISMISSED' 
+  | 'SNOOZED' 
+  | 'CANCELLED' 
+  | 'EXPIRED';
+
+export type PendingSuggestionType = 'ARRIVAL' | 'DEPARTURE';
+
+export type PendingSuggestionSource = 'WIFI_AUTO' | 'MANUAL';
+
+export interface PendingSuggestion {
+  id: string;
+  event_type: PendingSuggestionType;
+  detected_at: string; // ISO UTC string
+  source: PendingSuggestionSource;
+  network_match: number; // 0 or 1
+  status: PendingSuggestionStatus;
+  created_at: string; // ISO UTC string
+  confirmed_at: string | null; // ISO UTC string
+  notes: string;
+  client_updated_at: string;
+  is_deleted: number;
+}
+
 export interface AttendanceSession {
   id: string;
   status: AttendanceStatus;
@@ -16,6 +42,10 @@ export interface AttendanceSession {
   notes: string;
   is_incomplete: number; // 0 or 1
   is_corrected: number; // 0 or 1
+  source?: string;
+  detected_at?: string | null;
+  confirmed_at?: string | null;
+  network_match?: number;
   created_at: string;
   updated_at: string;
   client_updated_at: string;
@@ -40,6 +70,10 @@ export interface AttendanceEvent {
   event_type: AttendanceEventType;
   timestamp: string; // ISO UTC string
   notes: string;
+  source?: string;
+  detected_at?: string | null;
+  confirmed_at?: string | null;
+  network_match?: number;
   created_at: string;
 }
 
@@ -115,6 +149,10 @@ export interface UserSettings {
   theme: 'dark' | 'light' | 'system';
   wifi_ssid: string; // Phase 2 field
   wifi_bssid: string; // Phase 2 field
+  wifi_enabled: string; // '1' | '0'
+  wifi_grace_seconds: string; // e.g. '180'
+  wifi_cooldown_minutes: string; // e.g. '15'
+  wifi_last_dismissed_arrival: string; // ISO timestamp or ''
   backend_url: string;
   auth_token: string;
   last_sync_time: string | null;

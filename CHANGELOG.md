@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.1.0] - 2026-10-11
+
+### Added
+- **Phase 2: Smart Wi-Fi Attendance & Android Integration**:
+  - **Android Wi-Fi Connectivity Monitoring**: Native network listener via `@react-native-community/netinfo` with SSID normalization (stripping Android quotes) and BSSID MAC matching.
+  - **Suggestions & Pending Confirmation System**:
+    - Created durable `pending_suggestions` SQLite table with v2 migration.
+    - Added `suggestionsRepo.ts` domain state machine managing suggestions lifecycle (`PENDING`, `CONFIRMED`, `DISMISSED`, `SNOOZED`, `CANCELLED`, `EXPIRED`).
+    - Enforced transactional attendance generation: confirmation updates attendance session and marks suggestion confirmed atomically; double confirmation is strictly prevented.
+    - Arrival suggestion creation when office network detected and no session is active.
+    - Arrival dismissal cooldown (`wifi_cooldown_minutes`, default 15 min) preventing repetitive prompts while remaining connected.
+    - Departure suggestion generation with configurable grace period (`wifi_grace_seconds`, default 180s); temporary network drops/AP roaming auto-cancel departure suggestions upon reconnection.
+  - **Android Local Notifications & Permissions**:
+    - Notification dispatch via `expo-notifications` for arrival and departure alerts.
+    - Configured Android permissions (`ACCESS_FINE_LOCATION`, `ACCESS_COARSE_LOCATION`, `ACCESS_WIFI_STATE`, `POST_NOTIFICATIONS`).
+    - Added in-app permission setup flow and transparent privacy explanation (Location is required by Android OS to reveal SSID; GPS location is never accessed).
+  - **UI Extensions**:
+    - **Home Screen**: Prominent Pending Confirmation Banner with live action buttons (Confirm, Not Now / Snooze, Dismiss).
+    - **Attendance Screen**: Added `WI-FI` badge and detection/confirmation audit timestamps on session cards.
+    - **Settings Screen**: Activated Smart Wi-Fi configuration card (SSID, BSSID, toggle, grace period, cooldown) and real-time "Check Current Wi-Fi" diagnostic card.
+  - **Django REST Framework Backend Integration**:
+    - Extended `UserPreferences` model with `wifi_enabled`, `wifi_grace_seconds`, `wifi_cooldown_minutes`.
+    - Extended `AttendanceSession` and `AttendanceEvent` with `source`, `detected_at`, `confirmed_at`, `network_match`.
+    - Added `PendingSuggestion` model, serializer, and endpoints (`/api/v1/attendance/suggestions/`, `/api/v1/attendance/suggestions/<uuid:pk>/`).
+    - Extended `POST /api/v1/sync/` to batch sync `pending_suggestions` and audit metadata.
+  - **Automated Tests**:
+    - Mobile unit tests expanded to 23 tests covering SSID/BSSID normalization, AP matching, grace period auto-cancellation, cooldown logic, and break invariants.
+    - Backend automated tests expanded to 18 tests covering suggestion lifecycle, departure blocks on open breaks, sync idempotency, and preferences.
+
+---
+
 ## [1.0.1] - 2026-10-11
 
 ### Added

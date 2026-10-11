@@ -25,6 +25,11 @@ import {
 } from '@/db/settingsRepo';
 import { getSyncQueueStatus, performSync, SyncStatus } from '@/db/syncRepo';
 import { UserSettings } from '@/db/types';
+import {
+  checkCurrentWifiDiagnostic,
+  requestDetectionPermissions,
+  WifiDiagnosticReport,
+} from '@/services/wifiMonitorService';
 
 export default function SettingsScreen() {
   const scheme = useColorScheme();
@@ -42,6 +47,13 @@ export default function SettingsScreen() {
   const [authToken, setAuthToken] = useState('');
   const [wifiSsid, setWifiSsid] = useState('');
   const [wifiBssid, setWifiBssid] = useState('');
+  const [wifiEnabled, setWifiEnabled] = useState(true);
+  const [wifiGraceSeconds, setWifiGraceSeconds] = useState('180');
+  const [wifiCooldownMinutes, setWifiCooldownMinutes] = useState('15');
+
+  // Diagnostics State
+  const [diagnosticReport, setDiagnosticReport] = useState<WifiDiagnosticReport | null>(null);
+  const [checkingWifi, setCheckingWifi] = useState(false);
 
   const loadData = useCallback(() => {
     try {
@@ -54,6 +66,9 @@ export default function SettingsScreen() {
       setAuthToken(s.auth_token);
       setWifiSsid(s.wifi_ssid);
       setWifiBssid(s.wifi_bssid);
+      setWifiEnabled(s.wifi_enabled !== '0');
+      setWifiGraceSeconds(s.wifi_grace_seconds || '180');
+      setWifiCooldownMinutes(s.wifi_cooldown_minutes || '15');
 
       const q = getSyncQueueStatus();
       setSyncStatus(q);
@@ -78,11 +93,39 @@ export default function SettingsScreen() {
         auth_token: authToken.trim(),
         wifi_ssid: wifiSsid.trim(),
         wifi_bssid: wifiBssid.trim(),
+        wifi_enabled: wifiEnabled ? '1' : '0',
+        wifi_grace_seconds: wifiGraceSeconds.trim() || '180',
+        wifi_cooldown_minutes: wifiCooldownMinutes.trim() || '15',
       });
       loadData();
       Alert.alert('Settings Saved', 'Preferences updated successfully.');
     } catch (e: any) {
       Alert.alert('Error', e.message);
+    }
+  };
+
+  const handleCheckWifiDiagnostic = async () => {
+    setCheckingWifi(true);
+    try {
+      const report = await checkCurrentWifiDiagnostic();
+      setDiagnosticReport(report);
+    } catch (e: any) {
+      Alert.alert('Diagnostic Error', e.message);
+    } finally {
+      setCheckingWifi(false);
+    }
+  };
+
+  const handleRequestPermissions = async () => {
+    try {
+      const res = await requestDetectionPermissions();
+      Alert.alert(
+        'Permissions Status',
+        `Location (SSID access): ${res.locationGranted ? 'Granted' : 'Denied'}\nNotifications: ${res.notificationsGranted ? 'Granted' : 'Denied'}`
+      );
+      handleCheckWifiDiagnostic();
+    } catch (e: any) {
+      Alert.alert('Permission Error', e.message);
     }
   };
 
@@ -225,38 +268,157 @@ export default function SettingsScreen() {
           />
         </Card>
 
-        {/* Phase 2: Wi-Fi Detection Configuration (Clearly marked Inactive) */}
-        <Card style={styles.phase2Card}>
-          <View style={styles.phase2Header}>
-            <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>
-              Office Wi-Fi (Phase 2 Prep)
+        {/* Smart Wi-Fi Attendance Configuration */}
+        <Card>
+          <View style={styles.syncHeader}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>
+              Smart Wi-Fi Attendance
             </Text>
-            <Badge label="NOT YET ACTIVE" color={colors.textSecondary} bgColor="#33415540" />
+            <Badge
+              label={wifiEnabled ? 'ACTIVE' : 'DISABLED'}
+              color={wifiEnabled ? colors.success : colors.textSecondary}
+            />
           </View>
-          <Text style={[styles.phase2Desc, { color: colors.textMuted }]}>
-            Phase 1 stores configuration fields for your office Wi-Fi network. Background network
-            monitoring and geofence punch reminders will activate in Phase 2.
+          <Text style={[styles.cardSubtitle, { color: colors.textSecondary }]}>
+            Detect office arrival and departure transitions using Wi-Fi connectivity and prompt for explicit user confirmation.
           </Text>
 
+          <TouchableOpacity
+            style={styles.toggleRow}
+            activeOpacity={0.7}
+            onPress={() => setWifiEnabled(!wifiEnabled)}>
+            <Text style={[styles.toggleLabel, { color: colors.text }]}>Enable Wi-Fi Attendance Suggestions</Text>
+            <Ionicons
+              name={wifiEnabled ? 'checkbox' : 'square-outline'}
+              size={22}
+              color={wifiEnabled ? colors.primary : colors.textSecondary}
+            />
+          </TouchableOpacity>
+
           <Input
-            label="Office Wi-Fi SSID"
-            placeholder="e.g. Office_Guest_5G"
+            label="Office Wi-Fi SSID (Network Name)"
+            placeholder="e.g. Office_HQ or Company_WiFi"
             value={wifiSsid}
             onChangeText={setWifiSsid}
+            helper="The Wi-Fi network name broadcast by your office routers."
           />
+
           <Input
-            label="Router BSSID (Optional MAC)"
+            label="Router BSSID (Optional MAC Address)"
             placeholder="e.g. 00:14:22:01:23:45"
             value={wifiBssid}
             onChangeText={setWifiBssid}
+            helper="Optional. Specific access point MAC address if you want to restrict matching to a single router."
           />
+
+          <View style={{ flexDirection: 'row', gap: 12 }}>
+            <View style={{ flex: 1 }}>
+              <Input
+                label="Grace Period (Seconds)"
+                placeholder="180"
+                value={wifiGraceSeconds}
+                onChangeText={setWifiGraceSeconds}
+                keyboardType="numeric"
+                helper="Debounce window before suggesting departure."
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Input
+                label="Cooldown (Minutes)"
+                placeholder="15"
+                value={wifiCooldownMinutes}
+                onChangeText={setWifiCooldownMinutes}
+                keyboardType="numeric"
+                helper="Arrival prompt suppression after dismissal."
+              />
+            </View>
+          </View>
+
           <Button
             title="Save Wi-Fi Configuration"
-            variant="secondary"
-            size="sm"
+            variant="primary"
+            size="md"
             onPress={handleSavePreferences}
             style={{ marginTop: 8 }}
           />
+        </Card>
+
+        {/* Wi-Fi Diagnostics & Permissions */}
+        <Card>
+          <View style={styles.syncHeader}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>
+              Wi-Fi Diagnostics & Permissions
+            </Text>
+            <Ionicons name="hardware-chip-outline" size={20} color={colors.primary} />
+          </View>
+          <Text style={[styles.cardSubtitle, { color: colors.textSecondary }]}>
+            Android requires Location permission to expose connected Wi-Fi SSIDs to applications. Personal Time Ledger never accesses or transmits your GPS location.
+          </Text>
+
+          <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+            <Button
+              title="Check Current Wi-Fi"
+              variant="outline"
+              size="sm"
+              loading={checkingWifi}
+              onPress={handleCheckWifiDiagnostic}
+              icon={<Ionicons name="refresh-outline" size={16} color={colors.primary} />}
+              style={{ flex: 1 }}
+            />
+            <Button
+              title="Grant Permissions"
+              variant="secondary"
+              size="sm"
+              onPress={handleRequestPermissions}
+              icon={<Ionicons name="shield-checkmark-outline" size={16} color={colors.text} />}
+              style={{ flex: 1 }}
+            />
+          </View>
+
+          {diagnosticReport && (
+            <View style={styles.diagnosticContainer}>
+              <View style={styles.infoRow}>
+                <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>Network Connected:</Text>
+                <Text style={[styles.infoVal, { color: diagnosticReport.isConnected ? colors.success : colors.danger }]}>
+                  {diagnosticReport.isConnected ? 'YES' : 'NO'}
+                </Text>
+              </View>
+              <View style={styles.infoRow}>
+                <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>Wi-Fi Active:</Text>
+                <Text style={[styles.infoVal, { color: diagnosticReport.isWifi ? colors.success : colors.warning }]}>
+                  {diagnosticReport.isWifi ? 'YES' : 'NO'}
+                </Text>
+              </View>
+              <View style={styles.infoRow}>
+                <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>Detected SSID:</Text>
+                <Text style={[styles.infoVal, { color: colors.text }]}>
+                  {diagnosticReport.currentSsid || '<unknown or restricted>'}
+                </Text>
+              </View>
+              <View style={styles.infoRow}>
+                <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>Office Matched:</Text>
+                <Badge
+                  label={diagnosticReport.isMatched ? 'MATCHED' : 'NO MATCH'}
+                  color={diagnosticReport.isMatched ? colors.success : colors.warning}
+                />
+              </View>
+              <View style={styles.infoRow}>
+                <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>Location Permission:</Text>
+                <Text style={[styles.infoVal, { color: diagnosticReport.locationPermission === 'granted' ? colors.success : colors.danger }]}>
+                  {diagnosticReport.locationPermission.toUpperCase()}
+                </Text>
+              </View>
+              <View style={styles.infoRow}>
+                <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>Notification Permission:</Text>
+                <Text style={[styles.infoVal, { color: diagnosticReport.notificationPermission === 'granted' ? colors.success : colors.danger }]}>
+                  {diagnosticReport.notificationPermission.toUpperCase()}
+                </Text>
+              </View>
+              <Text style={[styles.diagnosticExplanation, { color: colors.textMuted }]}>
+                {diagnosticReport.statusExplanation}
+              </Text>
+            </View>
+          )}
         </Card>
 
         {/* Destructive Actions */}
@@ -328,20 +490,33 @@ const styles = StyleSheet.create({
     fontSize: 11,
     marginTop: 6,
   },
-  phase2Card: {
-    opacity: 0.9,
-    borderStyle: 'dashed',
-  },
-  phase2Header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  phase2Desc: {
+  cardSubtitle: {
     fontSize: 12,
     lineHeight: 17,
     marginBottom: 8,
+  },
+  toggleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 10,
+    marginBottom: 8,
+  },
+  toggleLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  diagnosticContainer: {
+    marginTop: 12,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#1E293B30',
+  },
+  diagnosticExplanation: {
+    fontSize: 12,
+    lineHeight: 16,
+    marginTop: 8,
+    fontStyle: 'italic',
   },
   dangerCard: {
     borderColor: '#EF444440',

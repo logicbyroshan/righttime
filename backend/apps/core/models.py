@@ -30,8 +30,11 @@ class UserPreferences(models.Model):
     office_name = models.CharField(max_length=120, default="Office")
     timezone = models.CharField(max_length=64, default="Asia/Kolkata")
     theme = models.CharField(max_length=20, default="dark")  # dark, light, system
-    wifi_ssid = models.CharField(max_length=120, blank=True, default="")  # Phase 2 prep
-    wifi_bssid = models.CharField(max_length=120, blank=True, default="")  # Phase 2 prep
+    wifi_ssid = models.CharField(max_length=120, blank=True, default="")
+    wifi_bssid = models.CharField(max_length=120, blank=True, default="")
+    wifi_enabled = models.BooleanField(default=True)
+    wifi_grace_seconds = models.PositiveIntegerField(default=180)
+    wifi_cooldown_minutes = models.PositiveIntegerField(default=15)
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):

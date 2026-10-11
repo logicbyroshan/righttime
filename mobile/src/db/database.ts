@@ -40,6 +40,14 @@ export function initDatabase(db: SQLite.SQLiteDatabase) {
       [1, new Date().toISOString()]
     );
   }
+
+  if (currentVersion < 2) {
+    applyMigrationV2(db);
+    db.runSync(
+      'INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?);',
+      [2, new Date().toISOString()]
+    );
+  }
 }
 
 function applyMigrationV1(db: SQLite.SQLiteDatabase) {
@@ -203,10 +211,70 @@ function applyMigrationV1(db: SQLite.SQLiteDatabase) {
   `);
 }
 
+function applyMigrationV2(db: SQLite.SQLiteDatabase) {
+  db.execSync(`
+    -- Pending Suggestions table
+    CREATE TABLE IF NOT EXISTS pending_suggestions (
+      id TEXT PRIMARY KEY,
+      event_type TEXT NOT NULL,
+      detected_at TEXT NOT NULL,
+      source TEXT NOT NULL DEFAULT 'WIFI_AUTO',
+      network_match INTEGER NOT NULL DEFAULT 1,
+      status TEXT NOT NULL DEFAULT 'PENDING',
+      created_at TEXT NOT NULL,
+      confirmed_at TEXT,
+      notes TEXT DEFAULT '',
+      client_updated_at TEXT NOT NULL,
+      is_deleted INTEGER DEFAULT 0
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_pending_sugg_status ON pending_suggestions(status);
+    CREATE INDEX IF NOT EXISTS idx_pending_sugg_detected ON pending_suggestions(detected_at);
+
+    -- New Wi-Fi configuration settings
+    INSERT OR IGNORE INTO user_settings (key, value) VALUES
+      ('wifi_enabled', '1'),
+      ('wifi_grace_seconds', '180'),
+      ('wifi_cooldown_minutes', '15'),
+      ('wifi_last_dismissed_arrival', '');
+  `);
+
+  // Safely add columns to attendance_sessions if they don't already exist
+  const sessionCols = db.getAllSync<{ name: string }>("PRAGMA table_info(attendance_sessions);").map(c => c.name);
+  if (!sessionCols.includes('source')) {
+    db.execSync("ALTER TABLE attendance_sessions ADD COLUMN source TEXT DEFAULT 'MANUAL';");
+  }
+  if (!sessionCols.includes('detected_at')) {
+    db.execSync("ALTER TABLE attendance_sessions ADD COLUMN detected_at TEXT;");
+  }
+  if (!sessionCols.includes('confirmed_at')) {
+    db.execSync("ALTER TABLE attendance_sessions ADD COLUMN confirmed_at TEXT;");
+  }
+  if (!sessionCols.includes('network_match')) {
+    db.execSync("ALTER TABLE attendance_sessions ADD COLUMN network_match INTEGER DEFAULT 1;");
+  }
+
+  // Safely add columns to attendance_events if they don't already exist
+  const eventCols = db.getAllSync<{ name: string }>("PRAGMA table_info(attendance_events);").map(c => c.name);
+  if (!eventCols.includes('source')) {
+    db.execSync("ALTER TABLE attendance_events ADD COLUMN source TEXT DEFAULT 'MANUAL';");
+  }
+  if (!eventCols.includes('detected_at')) {
+    db.execSync("ALTER TABLE attendance_events ADD COLUMN detected_at TEXT;");
+  }
+  if (!eventCols.includes('confirmed_at')) {
+    db.execSync("ALTER TABLE attendance_events ADD COLUMN confirmed_at TEXT;");
+  }
+  if (!eventCols.includes('network_match')) {
+    db.execSync("ALTER TABLE attendance_events ADD COLUMN network_match INTEGER DEFAULT 1;");
+  }
+}
+
 export function resetDatabase() {
   const db = getDatabase();
   db.execSync(`
     DROP TABLE IF EXISTS sync_queue;
+    DROP TABLE IF EXISTS pending_suggestions;
     DROP TABLE IF EXISTS habit_completions;
     DROP TABLE IF EXISTS habits;
     DROP TABLE IF EXISTS activity_entries;

@@ -36,6 +36,10 @@ class AttendanceEventSerializer(serializers.ModelSerializer):
             'event_type',
             'timestamp',
             'notes',
+            'source',
+            'detected_at',
+            'confirmed_at',
+            'network_match',
             'created_at',
         ]
         read_only_fields = ['session']
@@ -75,6 +79,10 @@ class AttendanceSessionSerializer(serializers.ModelSerializer):
             'notes',
             'is_incomplete',
             'is_corrected',
+            'source',
+            'detected_at',
+            'confirmed_at',
+            'network_match',
             'breaks',
             'events',
             'corrections',
@@ -88,6 +96,27 @@ class AttendanceSessionSerializer(serializers.ModelSerializer):
         ]
 
 
+class PendingSuggestionSerializer(serializers.ModelSerializer):
+    class Meta:
+        from apps.attendance.models import PendingSuggestion
+        model = PendingSuggestion
+        fields = [
+            'id',
+            'event_type',
+            'detected_at',
+            'source',
+            'network_match',
+            'status',
+            'confirmed_at',
+            'notes',
+            'created_at',
+            'updated_at',
+            'client_updated_at',
+            'is_deleted',
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+
 class ProcessAttendanceEventSerializer(serializers.Serializer):
     id = serializers.UUIDField(required=False)
     session_id = serializers.UUIDField(required=False)
@@ -95,6 +124,10 @@ class ProcessAttendanceEventSerializer(serializers.Serializer):
     timestamp = serializers.DateTimeField(required=False)
     work_date = serializers.DateField(required=False)
     notes = serializers.CharField(required=False, allow_blank=True, default='')
+    source = serializers.CharField(required=False, default='MANUAL')
+    detected_at = serializers.DateTimeField(required=False, allow_null=True)
+    confirmed_at = serializers.DateTimeField(required=False, allow_null=True)
+    network_match = serializers.BooleanField(required=False, default=True)
 
 
 class CorrectionRequestSerializer(serializers.Serializer):
