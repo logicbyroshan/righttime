@@ -7,6 +7,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.2.0] - 2026-10-11
+
+### Added
+- **Phase 3: Evidence Reports, Attendance Reconciliation, Backup & Release Readiness**:
+  - **Attendance Evidence Reports**:
+    - Detailed Daily, Weekly, and Monthly reports with header metadata (Display Name, Office Name, Reporting Period, Timestamp, Timezone, Unique Report ID).
+    - Monthly summary calculations (Calendar days, Recorded attendance days, Incomplete sessions, Gross office time, Break duration, Net duration, Manual vs Wi-Fi confirmed breakdown, Corrections count).
+    - Daily attendance ledger with per-day arrivals, departures, breaks, source tags, and audit flags.
+  - **Official Attendance Reconciliation Engine**:
+    - Pure comparison algorithms (`reconciliationService.ts`) comparing personal arrival/departure vs employer official HR punch.
+    - Explicit sign convention: `Difference = Personal Time - Official Time` (positive indicates personal recorded time was later; negative indicates earlier).
+    - Configurable discrepancy tolerance (default: ±5 minutes).
+    - Status classifications: `MATCH`, `ARRIVAL_DISCREPANCY`, `DEPARTURE_DISCREPANCY`, `DURATION_DISCREPANCY`, `OFFICIAL_MISSING`, `PERSONAL_MISSING`, `INCOMPLETE_PERSONAL`, `AMBIGUOUS`, `INVALID_OFFICIAL`, `REVIEWED`.
+    - Discrepancy review system: user can attach audit notes and mark discrepancies reviewed.
+  - **Official Attendance CSV Import**:
+    - RFC 4180 CSV parser (`csvParsing.ts`) supporting quoted fields, multi-line values, flexible date formats (ISO, DD/MM/YYYY, MM/DD/YYYY), and 12h/24h time formats.
+    - Interactive import wizard in Settings tab: file picker, column mapping, row validation preview, duplicate file SHA-256 detection, and SQLite persistence (`official_attendance_batches`, `official_attendance_records`).
+  - **PDF Evidence Report Generator**:
+    - Vector PDF generation using `expo-print` and `expo-sharing` (`pdfService.ts`).
+    - Print-friendly typography, repeated table headers (`thead`), page-break protection, and evidence disclaimers.
+    - 3 export types: Attendance Only, Attendance + Activities/Habits, Official Reconciliation.
+  - **CSV Data Exporter with Safe Formula-Injection Mitigation**:
+    - Full RFC 4180 CSV exports for all 7 entity types (Sessions, Events, Breaks, Activities, Habits, Official Records, Reconciliation Results).
+    - Protection against CSV Formula Injection (CWE-1236) by escaping `=, +, -, @` prefixes with single quotes.
+    - UTF-8 with BOM (`\uFEFF`) for Microsoft Excel compatibility.
+  - **Durable Backup & Restore**:
+    - Versioned structured JSON snapshot with SHA-256 integrity verification (`backupValidation.ts`).
+    - Pre-restore validation, integrity check, record count preview, and automatic emergency pre-restore rollback backup creation.
+    - Atomic replacement restore inside transaction with streak recalculation.
+  - **Django Backend Phase 3 Endpoints & Sync**:
+    - Created `OfficialImportBatch` and `OfficialAttendanceRecord` models and serializers.
+    - Added REST endpoints: `/api/v1/attendance/official-batches/`, `/api/v1/attendance/official-records/`, `/api/v1/attendance/official-records/<uuid:pk>/`.
+    - Extended batch sync handler (`/api/v1/sync/`) to support official batches and records.
+  - **Android Release Preparation**:
+    - Configured `mobile/app.json`: package `com.logicbyroshan.personaltimeledger`, version `1.2.0`, versionCode `3`, plugins `expo-print`, `expo-sharing`.
+  - **Automated Tests**:
+    - Mobile test suite expanded to **48 unit tests** across domain logic, Wi-Fi suggestions, reconciliation diffs, CSV parsing, formula mitigation, and backup checksum verification.
+    - Backend test suite expanded to **20 automated tests** covering official batch/record endpoints, sync, and invariants.
+
+---
+
 ## [1.1.0] - 2026-10-11
 
 ### Added

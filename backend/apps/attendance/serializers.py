@@ -4,6 +4,9 @@ from apps.attendance.models import (
     BreakSession,
     AttendanceEvent,
     AttendanceCorrection,
+    PendingSuggestion,
+    OfficialImportBatch,
+    OfficialAttendanceRecord,
 )
 
 
@@ -135,3 +138,45 @@ class CorrectionRequestSerializer(serializers.Serializer):
     start_time = serializers.DateTimeField(required=False)
     end_time = serializers.DateTimeField(required=False, allow_null=True)
     notes = serializers.CharField(required=False, allow_blank=True)
+
+
+class OfficialImportBatchSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = OfficialImportBatch
+        fields = [
+            'id',
+            'source_filename',
+            'file_hash',
+            'row_count',
+            'imported_at',
+            'notes',
+            'created_at',
+            'updated_at',
+            'client_updated_at',
+            'is_deleted',
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+
+class OfficialAttendanceRecordSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = OfficialAttendanceRecord
+        fields = [
+            'id',
+            'batch',
+            'work_date',
+            'check_in_time',
+            'check_out_time',
+            'break_duration_minutes',
+            'total_duration_minutes',
+            'source_description',
+            'validation_status',
+            'discrepancy_note',
+            'is_reviewed',
+            'created_at',
+            'updated_at',
+            'client_updated_at',
+            'is_deleted',
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+

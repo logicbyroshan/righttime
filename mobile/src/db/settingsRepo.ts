@@ -35,6 +35,7 @@ export function getSettings(): UserSettings {
     wifi_grace_seconds: map['wifi_grace_seconds'] || '180',
     wifi_cooldown_minutes: map['wifi_cooldown_minutes'] || '15',
     wifi_last_dismissed_arrival: map['wifi_last_dismissed_arrival'] || '',
+    reconciliation_tolerance_minutes: map['reconciliation_tolerance_minutes'] || '5',
     backend_url: map['backend_url'] || 'http://10.0.2.2:8000',
     auth_token: token,
     last_sync_time: map['last_sync_time'] || null,

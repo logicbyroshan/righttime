@@ -220,3 +220,70 @@ class AttendanceApiTests(TestCase):
         sess = AttendanceSession.objects.filter(id=sess_id).first()
         self.assertIsNotNone(sess)
         self.assertEqual(sess.source, 'WIFI_SUGGESTION')
+
+    def test_official_batch_and_record_endpoints(self):
+        # 1. Create official batch
+        batch_id = str(uuid.uuid4())
+        resp = self.client.post('/api/v1/attendance/official-batches/', {
+            'id': batch_id,
+            'source_filename': 'october_hr_punch.csv',
+            'file_hash': 'abcdef1234567890',
+            'row_count': 1,
+            'notes': 'Official biometrics report',
+        })
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(resp.data['source_filename'], 'october_hr_punch.csv')
+
+        # 2. Create official record
+        rec_id = str(uuid.uuid4())
+        rec_resp = self.client.post('/api/v1/attendance/official-records/', {
+            'id': rec_id,
+            'batch': batch_id,
+            'work_date': '2026-10-10',
+            'check_in_time': '2026-10-10T09:00:00Z',
+            'check_out_time': '2026-10-10T17:00:00Z',
+            'break_duration_minutes': 60,
+            'total_duration_minutes': 420,
+            'source_description': 'Biometric terminal 1',
+            'validation_status': 'VALID',
+        })
+        self.assertEqual(rec_resp.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(rec_resp.data['work_date'], '2026-10-10')
+
+        # 3. Patch review status and discrepancy note
+        patch_resp = self.client.patch(f'/api/v1/attendance/official-records/{rec_id}/', {
+            'is_reviewed': True,
+            'discrepancy_note': 'Discussed with manager - verified on premises',
+        })
+        self.assertEqual(patch_resp.status_code, status.HTTP_200_OK)
+        self.assertTrue(patch_resp.data['is_reviewed'])
+
+    def test_official_records_batch_sync(self):
+        batch_id = str(uuid.uuid4())
+        rec_id = str(uuid.uuid4())
+        resp = self.client.post('/api/v1/sync/', {
+            'device_id': 'test-phone',
+            'official_attendance_batches': [{
+                'id': batch_id,
+                'source_filename': 'sync_official.csv',
+                'file_hash': 'hash98765',
+                'row_count': 1,
+                'imported_at': self.now.isoformat(),
+            }],
+            'official_attendance_records': [{
+                'id': rec_id,
+                'batch_id': batch_id,
+                'work_date': '2026-10-11',
+                'check_in_time': '2026-10-11T09:15:00Z',
+                'check_out_time': '2026-10-11T17:30:00Z',
+                'break_duration_minutes': 45,
+                'total_duration_minutes': 450,
+                'source_description': 'Turnstile',
+                'validation_status': 'VALID',
+                'is_reviewed': True,
+            }],
+        }, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data['processed_counts']['official_attendance_batches'], 1)
+        self.assertEqual(resp.data['processed_counts']['official_attendance_records'], 1)
+
