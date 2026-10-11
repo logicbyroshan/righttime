@@ -65,7 +65,18 @@ export function getActiveSession(): ActiveSessionDetails {
   };
 }
 
-export function checkIn(notes: string = '', customTimestamp?: string): AttendanceSession {
+export interface AttendanceEventMetadata {
+  source?: 'MANUAL' | 'WIFI_SUGGESTION';
+  detectedAt?: string | null;
+  confirmedAt?: string | null;
+  networkMatch?: number;
+}
+
+export function checkIn(
+  notes: string = '',
+  customTimestamp?: string,
+  metadata?: AttendanceEventMetadata
+): AttendanceSession {
   const db = getDatabase();
   const existing = db.getFirstSync<AttendanceSession>(
     "SELECT id FROM attendance_sessions WHERE status = 'IN_PROGRESS' AND is_deleted = 0 LIMIT 1;"
@@ -80,19 +91,26 @@ export function checkIn(notes: string = '', customTimestamp?: string): Attendanc
   const eventId = generateUUID();
   const now = new Date().toISOString();
 
+  const source = metadata?.source || 'MANUAL';
+  const detectedAt = metadata?.detectedAt || null;
+  const confirmedAt = metadata?.confirmedAt || null;
+  const networkMatch = metadata?.networkMatch !== undefined ? metadata.networkMatch : 1;
+
   db.withTransactionSync(() => {
     db.runSync(
       `INSERT INTO attendance_sessions (
         id, status, start_time, end_time, work_date, notes, is_incomplete, is_corrected,
+        source, detected_at, confirmed_at, network_match,
         created_at, updated_at, client_updated_at, is_deleted
-      ) VALUES (?, 'IN_PROGRESS', ?, NULL, ?, ?, 0, 0, ?, ?, ?, 0);`,
-      [sessionId, timestamp, workDate, notes, now, now, now]
+      ) VALUES (?, 'IN_PROGRESS', ?, NULL, ?, ?, 0, 0, ?, ?, ?, ?, ?, ?, ?, 0);`,
+      [sessionId, timestamp, workDate, notes, source, detectedAt, confirmedAt, networkMatch, now, now, now]
     );
 
     db.runSync(
-      `INSERT INTO attendance_events (id, session_id, event_type, timestamp, notes, created_at)
-       VALUES (?, ?, 'CHECK_IN', ?, ?, ?);`,
-      [eventId, sessionId, timestamp, notes, now]
+      `INSERT INTO attendance_events (
+        id, session_id, event_type, timestamp, notes, source, detected_at, confirmed_at, network_match, created_at
+      ) VALUES (?, ?, 'CHECK_IN', ?, ?, ?, ?, ?, ?, ?);`,
+      [eventId, sessionId, timestamp, notes, source, detectedAt, confirmedAt, networkMatch, now]
     );
 
     enqueueSync('attendance_sessions', sessionId, 'UPSERT', {
@@ -101,6 +119,10 @@ export function checkIn(notes: string = '', customTimestamp?: string): Attendanc
       start_time: timestamp,
       work_date: workDate,
       notes,
+      source,
+      detected_at: detectedAt,
+      confirmed_at: confirmedAt,
+      network_match: networkMatch,
     });
 
     enqueueSync('attendance_events', eventId, 'UPSERT', {
@@ -109,6 +131,10 @@ export function checkIn(notes: string = '', customTimestamp?: string): Attendanc
       event_type: 'CHECK_IN',
       timestamp,
       notes,
+      source,
+      detected_at: detectedAt,
+      confirmed_at: confirmedAt,
+      network_match: networkMatch,
     });
   });
 
@@ -230,7 +256,11 @@ export function endBreak(notes: string = '', customTimestamp?: string): BreakSes
   ])!;
 }
 
-export function checkOut(notes: string = '', customTimestamp?: string): AttendanceSession {
+export function checkOut(
+  notes: string = '',
+  customTimestamp?: string,
+  metadata?: AttendanceEventMetadata
+): AttendanceSession {
   const db = getDatabase();
   const session = db.getFirstSync<AttendanceSession>(
     "SELECT * FROM attendance_sessions WHERE status = 'IN_PROGRESS' AND is_deleted = 0 LIMIT 1;"
@@ -251,22 +281,30 @@ export function checkOut(notes: string = '', customTimestamp?: string): Attendan
   const eventId = generateUUID();
   const now = new Date().toISOString();
 
+  const source = metadata?.source || 'MANUAL';
+  const detectedAt = metadata?.detectedAt || null;
+  const confirmedAt = metadata?.confirmedAt || null;
+  const networkMatch = metadata?.networkMatch !== undefined ? metadata.networkMatch : 1;
+
   db.withTransactionSync(() => {
     db.runSync(
       `UPDATE attendance_sessions SET
         status = 'COMPLETED',
         end_time = ?,
         notes = CASE WHEN ? != '' THEN notes || ' ' || ? ELSE notes END,
+        source = CASE WHEN source = 'MANUAL' AND ? != 'MANUAL' THEN ? ELSE source END,
+        confirmed_at = COALESCE(?, confirmed_at),
         updated_at = ?,
         client_updated_at = ?
        WHERE id = ?;`,
-      [timestamp, notes, notes, now, now, session.id]
+      [timestamp, notes, notes, source, source, confirmedAt, now, now, session.id]
     );
 
     db.runSync(
-      `INSERT INTO attendance_events (id, session_id, event_type, timestamp, notes, created_at)
-       VALUES (?, ?, 'CHECK_OUT', ?, ?, ?);`,
-      [eventId, session.id, timestamp, notes, now]
+      `INSERT INTO attendance_events (
+        id, session_id, event_type, timestamp, notes, source, detected_at, confirmed_at, network_match, created_at
+      ) VALUES (?, ?, 'CHECK_OUT', ?, ?, ?, ?, ?, ?, ?);`,
+      [eventId, session.id, timestamp, notes, source, detectedAt, confirmedAt, networkMatch, now]
     );
 
     enqueueSync('attendance_sessions', session.id, 'UPSERT', {
@@ -276,6 +314,10 @@ export function checkOut(notes: string = '', customTimestamp?: string): Attendan
       end_time: timestamp,
       work_date: session.work_date,
       notes: session.notes ? `${session.notes} ${notes}`.trim() : notes,
+      source,
+      detected_at: detectedAt,
+      confirmed_at: confirmedAt,
+      network_match: networkMatch,
     });
 
     enqueueSync('attendance_events', eventId, 'UPSERT', {
@@ -284,6 +326,10 @@ export function checkOut(notes: string = '', customTimestamp?: string): Attendan
       event_type: 'CHECK_OUT',
       timestamp,
       notes,
+      source,
+      detected_at: detectedAt,
+      confirmed_at: confirmedAt,
+      network_match: networkMatch,
     });
   });
 

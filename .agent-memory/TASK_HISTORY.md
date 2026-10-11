@@ -73,3 +73,41 @@ This file records meaningful engineering tasks executed on the repository.
   - Executed this task via `docs/branching-and-pr-workflow` branch.
 - **Known Follow-up**:
   - Submit and merge PR into `main`.
+
+---
+
+### Task: Phase 2 Smart Wi-Fi Attendance & Android Integration
+- **Date**: 2026-10-11
+- **Task**: Implement Phase 2: Smart Wi-Fi Attendance & Android Integration.
+- **Reason**: Enable reliable, privacy-conscious Wi-Fi arrival and departure suggestions requiring explicit user confirmation.
+- **Files/Areas Affected**:
+  - `mobile/`:
+    - `app.json`: Added permissions (`ACCESS_FINE_LOCATION`, `ACCESS_WIFI_STATE`, `POST_NOTIFICATIONS`) and plugins (`expo-notifications`, `expo-location`).
+    - `package.json`, `package-lock.json`: Installed `@react-native-community/netinfo`, `expo-location`, `expo-notifications`, `@types/node`.
+    - `src/db/types.ts`: Added `PendingSuggestion`, `PendingSuggestionType`, `PendingSuggestionStatus`, metadata fields (`source`, `detected_at`, `confirmed_at`, `network_match`), Wi-Fi settings fields.
+    - `src/db/database.ts`: Implemented `applyMigrationV2` with `pending_suggestions` table and column additions.
+    - `src/db/settingsRepo.ts`: Loaded and persisted new Wi-Fi preference keys.
+    - `src/db/attendanceRepo.ts`: Supported metadata in `checkIn` and `checkOut`.
+    - `src/db/suggestionsRepo.ts`: Created pending suggestions repository and lifecycle state machine.
+    - `src/services/wifiMatching.ts`: Pure SSID normalization and AP BSSID matching.
+    - `src/services/wifiMonitorService.ts`: Native NetInfo listener, grace period debounce, arrival cooldown, and local notifications.
+    - `src/app/_layout.tsx`: Registered Wi-Fi monitoring subscriber on mount.
+    - `src/app/(tabs)/index.tsx`: Added Pending Confirmation Banner with Confirm Arrival/Departure, Snooze, Dismiss actions.
+    - `src/app/(tabs)/attendance.tsx`: Added `WI-FI` badge and detection timestamps.
+    - `src/app/(tabs)/settings.tsx`: Added Smart Wi-Fi configuration and live Diagnostic card with permissions setup.
+    - `src/__tests__/wifiSuggestions.test.ts`: Added 16 new unit test cases.
+  - `backend/`:
+    - `apps/core/models.py`, `serializers.py`: Added Wi-Fi preferences to `UserPreferences`.
+    - `apps/attendance/models.py`: Added metadata to `AttendanceSession`, `AttendanceEvent`, and added `PendingSuggestion` model.
+    - `apps/attendance/serializers.py`: Updated session and event serializers; added `PendingSuggestionSerializer`.
+    - `apps/attendance/views.py`: Extended event views and added `PendingSuggestionListCreateView`, `PendingSuggestionDetailView`.
+    - `apps/sync/views.py`: Added `pending_suggestions` batch upsert and server changes.
+    - `config/api_urls.py`: Registered `/api/v1/attendance/suggestions/`.
+    - `apps/attendance/tests.py`: Added suggestion lifecycle, break blockage, sync tests.
+    - Migrations: Generated and applied `attendance.0002` and `core.0002`.
+- **Important Decisions**:
+  - ADR-008 (Wi-Fi Suggestion Invariant: Connection is not attendance; explicit confirmation required).
+- **Testing Performed**:
+  - Backend: 18/18 Django automated tests passed (`python manage.py test`).
+  - Mobile: 23/23 unit tests passed (`npm test`).
+  - TypeScript: 0 errors (`npx tsc --noEmit`).

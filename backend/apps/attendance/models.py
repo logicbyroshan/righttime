@@ -19,6 +19,10 @@ class AttendanceSession(BaseModel):
     notes = models.TextField(blank=True, default='')
     is_incomplete = models.BooleanField(default=False)
     is_corrected = models.BooleanField(default=False)
+    source = models.CharField(max_length=32, default='MANUAL')
+    detected_at = models.DateTimeField(null=True, blank=True)
+    confirmed_at = models.DateTimeField(null=True, blank=True)
+    network_match = models.BooleanField(default=True)
 
     class Meta:
         ordering = ['-start_time']
@@ -103,6 +107,10 @@ class AttendanceEvent(models.Model):
     event_type = models.CharField(max_length=20, choices=EVENT_CHOICES)
     timestamp = models.DateTimeField(default=timezone.now)
     notes = models.TextField(blank=True, default='')
+    source = models.CharField(max_length=32, default='MANUAL')
+    detected_at = models.DateTimeField(null=True, blank=True)
+    confirmed_at = models.DateTimeField(null=True, blank=True)
+    network_match = models.BooleanField(default=True)
     created_at = models.DateTimeField(default=timezone.now)
 
     class Meta:
@@ -129,3 +137,44 @@ class AttendanceCorrection(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+
+
+class PendingSuggestion(BaseModel):
+    TYPE_ARRIVAL = 'ARRIVAL'
+    TYPE_DEPARTURE = 'DEPARTURE'
+    TYPE_CHOICES = [
+        (TYPE_ARRIVAL, 'Arrival'),
+        (TYPE_DEPARTURE, 'Departure'),
+    ]
+    STATUS_PENDING = 'PENDING'
+    STATUS_CONFIRMED = 'CONFIRMED'
+    STATUS_DISMISSED = 'DISMISSED'
+    STATUS_SNOOZED = 'SNOOZED'
+    STATUS_CANCELLED = 'CANCELLED'
+    STATUS_EXPIRED = 'EXPIRED'
+    STATUS_CHOICES = [
+        (STATUS_PENDING, 'Pending'),
+        (STATUS_CONFIRMED, 'Confirmed'),
+        (STATUS_DISMISSED, 'Dismissed'),
+        (STATUS_SNOOZED, 'Snoozed'),
+        (STATUS_CANCELLED, 'Cancelled'),
+        (STATUS_EXPIRED, 'Expired'),
+    ]
+
+    event_type = models.CharField(max_length=20, choices=TYPE_CHOICES)
+    detected_at = models.DateTimeField()
+    source = models.CharField(max_length=32, default='WIFI_AUTO')
+    network_match = models.BooleanField(default=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    confirmed_at = models.DateTimeField(null=True, blank=True)
+    notes = models.TextField(blank=True, default='')
+
+    class Meta:
+        ordering = ['-detected_at']
+        indexes = [
+            models.Index(fields=['user', 'status']),
+            models.Index(fields=['user', 'event_type']),
+        ]
+
+    def __str__(self):
+        return f"Suggestion {self.event_type} ({self.status}) for {self.user.username}"

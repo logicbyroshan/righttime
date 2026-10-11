@@ -39,7 +39,13 @@ import {
 } from '@/db/activitiesRepo';
 import { getHabitsWithStatus, HabitWithStatus } from '@/db/habitsRepo';
 import { getSettings } from '@/db/settingsRepo';
-import { AttendanceEvent } from '@/db/types';
+import {
+  getPendingSuggestions,
+  confirmSuggestion,
+  dismissSuggestion,
+  snoozeSuggestion,
+} from '@/db/suggestionsRepo';
+import { AttendanceEvent, PendingSuggestion } from '@/db/types';
 
 function formatDuration(totalSeconds: number): string {
   const hours = Math.floor(totalSeconds / 3600);
@@ -61,6 +67,7 @@ export default function HomeScreen() {
   const [activities, setActivities] = useState<ActivitySummaryItem[]>([]);
   const [habits, setHabits] = useState<HabitWithStatus[]>([]);
   const [officeName, setOfficeName] = useState('Office HQ');
+  const [pendingSuggestions, setPendingSuggestions] = useState<PendingSuggestion[]>([]);
 
   // Load all dashboard data
   const loadData = useCallback(() => {
@@ -82,6 +89,9 @@ export default function HomeScreen() {
 
       const settings = getSettings();
       setOfficeName(settings.office_name);
+
+      const suggs = getPendingSuggestions();
+      setPendingSuggestions(suggs);
     } catch (e: any) {
       console.error('Error loading dashboard data:', e);
     }
@@ -111,6 +121,34 @@ export default function HomeScreen() {
     loadData();
     setRefreshing(false);
   }, [loadData]);
+
+  // Suggestion action handlers
+  const handleConfirmSuggestion = (sugg: PendingSuggestion) => {
+    try {
+      confirmSuggestion(sugg.id, '', 'NOW');
+      loadData();
+    } catch (e: any) {
+      Alert.alert('Confirmation Error', e.message);
+    }
+  };
+
+  const handleDismissSuggestion = (sugg: PendingSuggestion) => {
+    try {
+      dismissSuggestion(sugg.id, 'Dismissed by user');
+      loadData();
+    } catch (e: any) {
+      Alert.alert('Dismiss Error', e.message);
+    }
+  };
+
+  const handleSnoozeSuggestion = (sugg: PendingSuggestion) => {
+    try {
+      snoozeSuggestion(sugg.id, 15);
+      loadData();
+    } catch (e: any) {
+      Alert.alert('Snooze Error', e.message);
+    }
+  };
 
   // Attendance action handlers
   const handleCheckIn = () => {
@@ -208,6 +246,56 @@ export default function HomeScreen() {
           </View>
           <Badge label={stateBadgeLabel} color={stateBadgeColor} />
         </View>
+
+        {/* Pending Wi-Fi Attendance Confirmation Banner */}
+        {pendingSuggestions.length > 0 && (
+          <Card style={[styles.suggestionCard, { borderColor: colors.primary }]}>
+            <View style={styles.suggestionHeader}>
+              <View style={styles.suggestionTitleRow}>
+                <Ionicons
+                  name={pendingSuggestions[0].event_type === 'ARRIVAL' ? 'business' : 'exit'}
+                  size={20}
+                  color={colors.primary}
+                />
+                <Text style={[styles.suggestionTitle, { color: colors.text }]}>
+                  {pendingSuggestions[0].event_type === 'ARRIVAL'
+                    ? 'Office Arrival Detected'
+                    : 'Office Departure Detected'}
+                </Text>
+              </View>
+              <Badge label="Action Required" color={colors.primary} />
+            </View>
+
+            <Text style={[styles.suggestionBody, { color: colors.textSecondary }]}>
+              {pendingSuggestions[0].event_type === 'ARRIVAL'
+                ? `Office Wi-Fi detected at ${new Date(pendingSuggestions[0].detected_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}. Are you arriving at the office?`
+                : `Office Wi-Fi disconnected at ${new Date(pendingSuggestions[0].detected_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}. Have you left the office?`}
+            </Text>
+
+            <View style={styles.suggestionActionsRow}>
+              <Button
+                title={pendingSuggestions[0].event_type === 'ARRIVAL' ? 'Confirm Arrival' : 'Confirm Departure'}
+                variant="primary"
+                size="sm"
+                onPress={() => handleConfirmSuggestion(pendingSuggestions[0])}
+                style={{ flex: 1, marginRight: 8 }}
+              />
+              <Button
+                title="Not Now"
+                variant="outline"
+                size="sm"
+                onPress={() => handleSnoozeSuggestion(pendingSuggestions[0])}
+                style={{ marginRight: 8 }}
+              />
+              <Button
+                title="Dismiss"
+                variant="danger"
+                size="sm"
+                onPress={() => handleDismissSuggestion(pendingSuggestions[0])}
+              />
+            </View>
+          </Card>
+        )}
 
         {/* Live Active Activity Timer Banner if running */}
         {activeTimer?.entry && (
@@ -520,5 +608,33 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     fontVariant: ['tabular-nums'],
+  },
+  suggestionCard: {
+    marginBottom: Spacing.md,
+    borderWidth: 1.5,
+  },
+  suggestionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  suggestionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  suggestionTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  suggestionBody: {
+    fontSize: 13,
+    lineHeight: 18,
+    marginBottom: Spacing.md,
+  },
+  suggestionActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
 });

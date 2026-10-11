@@ -9,11 +9,13 @@ from apps.attendance.models import (
     BreakSession,
     AttendanceEvent,
     AttendanceCorrection,
+    PendingSuggestion,
 )
 from apps.attendance.serializers import (
     AttendanceSessionSerializer,
     ProcessAttendanceEventSerializer,
     CorrectionRequestSerializer,
+    PendingSuggestionSerializer,
 )
 
 
@@ -114,12 +116,20 @@ class ProcessAttendanceEventView(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             work_date = data.get('work_date') or event_time.date()
+            source = data.get('source', 'MANUAL')
+            detected_at = data.get('detected_at')
+            confirmed_at = data.get('confirmed_at')
+            network_match = data.get('network_match', True)
             session = AttendanceSession.objects.create(
                 user=user,
                 status=AttendanceSession.STATUS_IN_PROGRESS,
                 start_time=event_time,
                 work_date=work_date,
                 notes=notes,
+                source=source,
+                detected_at=detected_at,
+                confirmed_at=confirmed_at,
+                network_match=network_match,
             )
             AttendanceEvent.objects.create(
                 id=event_id,
@@ -128,6 +138,10 @@ class ProcessAttendanceEventView(APIView):
                 event_type=event_type,
                 timestamp=event_time,
                 notes=notes,
+                source=source,
+                detected_at=detected_at,
+                confirmed_at=confirmed_at,
+                network_match=network_match,
             )
             return Response({
                 "status": "success",
@@ -207,10 +221,18 @@ class ProcessAttendanceEventView(APIView):
                     {"status": "error", "message": "A break is currently open. Please end the break explicitly before checking out."},
                     status=status.HTTP_400_BAD_REQUEST
                 )
+            source = data.get('source', 'MANUAL')
+            detected_at = data.get('detected_at')
+            confirmed_at = data.get('confirmed_at')
+            network_match = data.get('network_match', True)
             active_session.end_time = event_time
             active_session.status = AttendanceSession.STATUS_COMPLETED
             if notes:
                 active_session.notes = f"{active_session.notes} {notes}".strip()
+            if source != 'MANUAL':
+                active_session.source = source
+            if confirmed_at:
+                active_session.confirmed_at = confirmed_at
             active_session.save()
 
             AttendanceEvent.objects.create(
@@ -220,6 +242,10 @@ class ProcessAttendanceEventView(APIView):
                 event_type=event_type,
                 timestamp=event_time,
                 notes=notes,
+                source=source,
+                detected_at=detected_at,
+                confirmed_at=confirmed_at,
+                network_match=network_match,
             )
             return Response({
                 "status": "success",
@@ -296,3 +322,136 @@ class CorrectAttendanceSessionView(APIView):
         )
 
         return Response(AttendanceSessionSerializer(session).data)
+
+
+class PendingSuggestionListCreateView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        qs = PendingSuggestion.objects.filter(user=request.user, is_deleted=False)
+        status_param = request.query_params.get('status')
+        if status_param:
+            qs = qs.filter(status=status_param)
+        serializer = PendingSuggestionSerializer(qs, many=True)
+        return Response(serializer.data)
+
+    def post(self, request):
+        data = request.data.copy()
+        s_id = data.get('id') or uuid.uuid4()
+        existing = PendingSuggestion.objects.filter(id=s_id, user=request.user).first()
+        if existing:
+            return Response(PendingSuggestionSerializer(existing).data, status=status.HTTP_200_OK)
+
+        serializer = PendingSuggestionSerializer(data=data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        suggestion = PendingSuggestion.objects.create(
+            id=s_id,
+            user=request.user,
+            event_type=serializer.validated_data['event_type'],
+            detected_at=serializer.validated_data['detected_at'],
+            source=serializer.validated_data.get('source', 'WIFI_AUTO'),
+            network_match=serializer.validated_data.get('network_match', True),
+            status=serializer.validated_data.get('status', PendingSuggestion.STATUS_PENDING),
+            notes=serializer.validated_data.get('notes', ''),
+        )
+        return Response(PendingSuggestionSerializer(suggestion).data, status=status.HTTP_201_CREATED)
+
+
+class PendingSuggestionDetailView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    @transaction.atomic
+    def post(self, request, pk):
+        suggestion = PendingSuggestion.objects.filter(pk=pk, user=request.user, is_deleted=False).first()
+        if not suggestion:
+            return Response({"status": "error", "message": "Suggestion not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        action = request.data.get('action')
+        now = timezone.now()
+
+        if action == 'confirm':
+            if suggestion.status != PendingSuggestion.STATUS_PENDING:
+                return Response(
+                    {"status": "error", "message": f"Cannot confirm suggestion with status {suggestion.status}."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            active_session = AttendanceSession.objects.filter(
+                user=request.user,
+                status=AttendanceSession.STATUS_IN_PROGRESS,
+                is_deleted=False
+            ).first()
+
+            if suggestion.event_type == PendingSuggestion.TYPE_ARRIVAL:
+                if active_session:
+                    return Response({"status": "error", "message": "An office session is already active."}, status=status.HTTP_400_BAD_REQUEST)
+                session = AttendanceSession.objects.create(
+                    user=request.user,
+                    status=AttendanceSession.STATUS_IN_PROGRESS,
+                    start_time=now,
+                    work_date=now.date(),
+                    notes=f"[Wi-Fi Suggestion] {suggestion.notes}".strip(),
+                    source='WIFI_SUGGESTION',
+                    detected_at=suggestion.detected_at,
+                    confirmed_at=now,
+                    network_match=suggestion.network_match,
+                )
+                AttendanceEvent.objects.create(
+                    session=session,
+                    user=request.user,
+                    event_type=AttendanceEvent.EVENT_CHECK_IN,
+                    timestamp=now,
+                    notes="Confirmed from Wi-Fi arrival suggestion",
+                    source='WIFI_SUGGESTION',
+                    detected_at=suggestion.detected_at,
+                    confirmed_at=now,
+                    network_match=suggestion.network_match,
+                )
+            elif suggestion.event_type == PendingSuggestion.TYPE_DEPARTURE:
+                if not active_session:
+                    return Response({"status": "error", "message": "No active office session found to check out."}, status=status.HTTP_400_BAD_REQUEST)
+                open_break = active_session.breaks.filter(end_time__isnull=True, is_deleted=False).first()
+                if open_break:
+                    return Response({"status": "error", "message": "A break is currently open. Please end your break before confirming departure."}, status=status.HTTP_400_BAD_REQUEST)
+                active_session.status = AttendanceSession.STATUS_COMPLETED
+                active_session.end_time = now
+                active_session.source = 'WIFI_SUGGESTION'
+                active_session.confirmed_at = now
+                active_session.save()
+                AttendanceEvent.objects.create(
+                    session=active_session,
+                    user=request.user,
+                    event_type=AttendanceEvent.EVENT_CHECK_OUT,
+                    timestamp=now,
+                    notes="Confirmed from Wi-Fi departure suggestion",
+                    source='WIFI_SUGGESTION',
+                    detected_at=suggestion.detected_at,
+                    confirmed_at=now,
+                    network_match=suggestion.network_match,
+                )
+
+            suggestion.status = PendingSuggestion.STATUS_CONFIRMED
+            suggestion.confirmed_at = now
+            suggestion.save()
+
+        elif action == 'dismiss':
+            suggestion.status = PendingSuggestion.STATUS_DISMISSED
+            suggestion.notes = request.data.get('reason', suggestion.notes)
+            suggestion.save()
+
+        elif action == 'snooze':
+            suggestion.status = PendingSuggestion.STATUS_SNOOZED
+            suggestion.notes = request.data.get('notes', suggestion.notes)
+            suggestion.save()
+
+        elif action == 'cancel':
+            suggestion.status = PendingSuggestion.STATUS_CANCELLED
+            suggestion.notes = request.data.get('reason', suggestion.notes)
+            suggestion.save()
+
+        else:
+            return Response({"status": "error", "message": "Invalid action."}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(PendingSuggestionSerializer(suggestion).data)

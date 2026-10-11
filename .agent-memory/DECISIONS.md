@@ -82,3 +82,16 @@ Do not silently reverse any decision recorded here.
 - **Alternatives Considered**:
   - Direct pushes to `main`: Faster for single developers, but bypasses PR audit trails and makes task rollbacks harder.
 - **Consequences**: Complete traceability of each change set via GitHub Pull Requests; `main` remains continuously releasable.
+
+---
+
+## ADR-008: Wi-Fi Suggestion Invariant — Connection is not Attendance
+- **Date**: 2026-10-11
+- **Status**: Accepted
+- **Context**: Automatic punch-in / punch-out based purely on Wi-Fi state creates false attendance records due to signal drops, router restarts, AP roaming, or passing near the office without entering.
+- **Decision**: Wi-Fi detection generates *pending suggestions* stored in `pending_suggestions`, requiring explicit user confirmation. Loss of Wi-Fi uses a configurable grace period (`wifi_grace_seconds`, default 180s) that auto-cancels if the network reconnects. Dismissing arrival prompts activates a cooldown window (`wifi_cooldown_minutes`, default 15m) to avoid repetitive prompts.
+- **Alternatives Considered**:
+  - Automatic check-in/check-out on connection change: Generates inaccurate punches and false sessions.
+  - Silent checkout on timeout: Violates tamper-evident personal ledger guarantee.
+- **Consequences**: Highly reliable, tamper-evident records preserving separate detection and confirmation timestamps.
+

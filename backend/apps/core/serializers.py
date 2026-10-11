@@ -14,6 +14,9 @@ class UserPreferencesSerializer(serializers.ModelSerializer):
             'theme',
             'wifi_ssid',
             'wifi_bssid',
+            'wifi_enabled',
+            'wifi_grace_seconds',
+            'wifi_cooldown_minutes',
             'updated_at',
         ]
 
