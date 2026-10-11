@@ -2,7 +2,7 @@
 
 ## 1. Version & Baseline
 - **Release Version**: 1.1.0 (Phase 2 Smart Wi-Fi Attendance Complete)
-- **Git Branch**: `feature/smart-wifi-attendance` (merging to `main`)
+- **Git Branch**: `main` (merged via PR #2)
 - **Remote Branch**: `main` tracked on `https://github.com/logicbyroshan/righttime.git`
 - **Build Status**:
   - Backend: 18/18 tests passing.
