@@ -1,16 +1,18 @@
 {
   "expo": {
-    "name": "mobile",
-    "slug": "mobile",
-    "version": "1.0.0",
+    "name": "Personal Time Ledger",
+    "slug": "personal-time-ledger",
+    "version": "1.2.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "mobile",
+    "scheme": "personal-time-ledger",
     "userInterfaceStyle": "automatic",
     "ios": {
       "icon": "./assets/expo.icon"
     },
     "android": {
+      "package": "com.logicbyroshan.personaltimeledger",
+      "versionCode": 3,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -43,7 +45,9 @@
       "expo-sqlite",
       "expo-secure-store",
       "expo-notifications",
-      "expo-location"
+      "expo-location",
+      "expo-sharing",
+      "expo-print"
     ],
     "experiments": {
       "typedRoutes": true,

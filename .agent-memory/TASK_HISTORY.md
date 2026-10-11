@@ -111,3 +111,44 @@ This file records meaningful engineering tasks executed on the repository.
   - Backend: 18/18 Django automated tests passed (`python manage.py test`).
   - Mobile: 23/23 unit tests passed (`npm test`).
   - TypeScript: 0 errors (`npx tsc --noEmit`).
+
+---
+
+### Task: Phase 3 Evidence Reports, Reconciliation, Backup & Release Readiness
+- **Date**: 2026-10-11
+- **Task**: Implement Phase 3: Evidence reports, official attendance comparison & CSV import, PDF generator, CSV exporter, backup and restore, and Android release preparation.
+- **Reason**: Provide a trustworthy, tamper-evident personal ledger that can be reviewed against the employer's official attendance system, backed up safely, and exported as professional evidence reports.
+- **Files/Areas Affected**:
+  - `mobile/`:
+    - `app.json`: Configured app name "Personal Time Ledger", version 1.2.0, versionCode 3, package `com.logicbyroshan.personaltimeledger`, plugins `expo-print`, `expo-sharing`.
+    - `package.json`, `package-lock.json`: Added `expo-print`, `expo-sharing`, `expo-file-system`, `expo-document-picker`.
+    - `src/db/types.ts`: Added `OfficialImportBatch`, `OfficialAttendanceRecord`, `ReconciliationItem`, `ReconciliationSummary`, `UserSettings.reconciliation_tolerance_minutes`.
+    - `src/db/database.ts`: Implemented `applyMigrationV3` creating `official_attendance_batches` and `official_attendance_records`.
+    - `src/db/settingsRepo.ts`: Loaded `reconciliation_tolerance_minutes` setting.
+    - `src/db/officialRepo.ts`: Created official batch and record persistence repository.
+    - `src/services/reconciliationService.ts`: Pure reconciliation engine with exact diff formulas and configurable tolerance.
+    - `src/services/csvParsing.ts`: Pure RFC 4180 CSV parser, flexible date/time normalizers, and formula-injection mitigation (CWE-1236).
+    - `src/services/csvService.ts`: CSV export and native share sheet integration.
+    - `src/services/pdfService.ts`: Vector PDF report generator using `expo-print` with print-friendly CSS.
+    - `src/services/backupValidation.ts`: Pure FIPS 180-4 SHA-256 data checksum computation and structured backup validation.
+    - `src/services/backupService.ts`: Complete database backup serializer, rollback creator, and atomic replacement restore.
+    - `src/services/reportExportHelpers.ts`: Helper compiling SQLite data into 7 CSV datasets and PDF options.
+    - `src/app/(tabs)/reports.tsx`: Integrated Official Comparison view, PDF report generator modal, and CSV dataset export dialog.
+    - `src/app/(tabs)/settings.tsx`: Added Official Attendance CSV import wizard, Backup & Restore card with checksum verification, and tolerance setting.
+    - `src/__tests__/phase3.test.ts`: Added 25 unit test cases covering reconciliation, CSV parsing, formula mitigation, and backup integrity.
+  - `backend/`:
+    - `apps/attendance/models.py`: Added `OfficialImportBatch` and `OfficialAttendanceRecord`.
+    - `apps/attendance/serializers.py`: Added serializers for official batches and records.
+    - `apps/attendance/views.py`: Added `OfficialBatchListCreateView`, `OfficialRecordListCreateView`, `OfficialRecordDetailView`.
+    - `apps/sync/views.py`: Extended batch sync engine to ingest and respond with official batches and records.
+    - `config/api_urls.py`: Registered official endpoints under `/api/v1/attendance/`.
+    - `apps/attendance/tests.py`: Added automated API tests for official endpoints and sync.
+    - Migrations: Generated and applied `attendance.0003`.
+- **Important Decisions**:
+  - ADR-009 (Official Attendance Reconciliation Sign Convention & Invariants).
+  - ADR-010 (Zero-Dependency FIPS 180-4 SHA-256 for Structured Backups).
+- **Testing Performed**:
+  - Backend: 20/20 Django automated tests passed (`python manage.py test`).
+  - Mobile: 48/48 unit tests passed (`npm test`).
+  - TypeScript: 0 compilation errors (`npx tsc --noEmit`).
+

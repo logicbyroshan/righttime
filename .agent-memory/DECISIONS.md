@@ -95,3 +95,28 @@ Do not silently reverse any decision recorded here.
   - Silent checkout on timeout: Violates tamper-evident personal ledger guarantee.
 - **Consequences**: Highly reliable, tamper-evident records preserving separate detection and confirmation timestamps.
 
+---
+
+## ADR-009: Official Attendance Reconciliation Sign Convention & Invariants
+- **Date**: 2026-10-11
+- **Status**: Accepted
+- **Context**: Comparing personal attendance against official employer HR/biometric punches requires clear, mathematically consistent sign conventions and strict separation of data sources.
+- **Decision**:
+  - Personal records and imported official records are stored in strictly separate SQLite tables (`attendance_sessions` vs `official_attendance_records`). Neither system overwrites the other.
+  - Time differences are strictly computed as: `Difference = Personal Time - Official Time`.
+    - Positive difference (+) means personal recorded time was later than official.
+    - Negative difference (-) means personal recorded time was earlier than official.
+  - Discrepancy tolerances (default ±5m) classify records into statuses (`MATCH`, `ARRIVAL_DISCREPANCY`, `DEPARTURE_DISCREPANCY`, `DURATION_DISCREPANCY`, `PERSONAL_MISSING`, `OFFICIAL_MISSING`, `INCOMPLETE_PERSONAL`, `AMBIGUOUS`, `REVIEWED`).
+  - Users can annotate discrepancies with audit notes and mark them reviewed.
+- **Consequences**: Unambiguous, tamper-evident evidence reports that can be used directly in workplace discussions without altering the underlying raw records.
+
+---
+
+## ADR-010: Zero-Dependency FIPS 180-4 SHA-256 for Structured Backups
+- **Date**: 2026-10-11
+- **Status**: Accepted
+- **Context**: Backup files must include cryptographic checksum verification to prevent importing corrupted or altered archives. The checksum algorithm must run identically across the Node.js test runner, Android runtime, iOS, and Web without relying on platform-specific native bridge packages.
+- **Decision**: Implement pure TypeScript FIPS 180-4 SHA-256 checksumming in `backupValidation.ts`. All database backups are serialized into a canonical JSON snapshot containing schema versions, record counts, and payload data.
+- **Consequences**: 100% platform-agnostic checksum verification with zero dependencies; fails cleanly on tampered or truncated backup files before touching SQLite.
+
+

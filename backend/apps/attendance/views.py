@@ -10,12 +10,16 @@ from apps.attendance.models import (
     AttendanceEvent,
     AttendanceCorrection,
     PendingSuggestion,
+    OfficialImportBatch,
+    OfficialAttendanceRecord,
 )
 from apps.attendance.serializers import (
     AttendanceSessionSerializer,
     ProcessAttendanceEventSerializer,
     CorrectionRequestSerializer,
     PendingSuggestionSerializer,
+    OfficialImportBatchSerializer,
+    OfficialAttendanceRecordSerializer,
 )
 
 
@@ -455,3 +459,73 @@ class PendingSuggestionDetailView(APIView):
             return Response({"status": "error", "message": "Invalid action."}, status=status.HTTP_400_BAD_REQUEST)
 
         return Response(PendingSuggestionSerializer(suggestion).data)
+
+
+class OfficialBatchListCreateView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        batches = OfficialImportBatch.objects.filter(user=request.user, is_deleted=False)
+        return Response(OfficialImportBatchSerializer(batches, many=True).data)
+
+    def post(self, request):
+        batch_id = request.data.get('id') or uuid.uuid4()
+        serializer = OfficialImportBatchSerializer(data=request.data)
+        if serializer.is_valid():
+            batch = serializer.save(id=batch_id, user=request.user)
+            return Response(OfficialImportBatchSerializer(batch).data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class OfficialRecordListCreateView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        qs = OfficialAttendanceRecord.objects.filter(user=request.user, is_deleted=False)
+        start_date = request.query_params.get('start_date')
+        end_date = request.query_params.get('end_date')
+        if start_date:
+            qs = qs.filter(work_date__gte=start_date)
+        if end_date:
+            qs = qs.filter(work_date__lte=end_date)
+        batch_id = request.query_params.get('batch_id')
+        if batch_id:
+            qs = qs.filter(batch_id=batch_id)
+        return Response(OfficialAttendanceRecordSerializer(qs, many=True).data)
+
+    def post(self, request):
+        rec_id = request.data.get('id') or uuid.uuid4()
+        serializer = OfficialAttendanceRecordSerializer(data=request.data)
+        if serializer.is_valid():
+            record = serializer.save(id=rec_id, user=request.user)
+            return Response(OfficialAttendanceRecordSerializer(record).data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class OfficialRecordDetailView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, pk):
+        record = OfficialAttendanceRecord.objects.filter(id=pk, user=request.user, is_deleted=False).first()
+        if not record:
+            return Response({"status": "error", "message": "Record not found."}, status=status.HTTP_404_NOT_FOUND)
+        return Response(OfficialAttendanceRecordSerializer(record).data)
+
+    def patch(self, request, pk):
+        record = OfficialAttendanceRecord.objects.filter(id=pk, user=request.user, is_deleted=False).first()
+        if not record:
+            return Response({"status": "error", "message": "Record not found."}, status=status.HTTP_404_NOT_FOUND)
+        serializer = OfficialAttendanceRecordSerializer(record, data=request.data, partial=True)
+        if serializer.is_valid():
+            record = serializer.save()
+            return Response(OfficialAttendanceRecordSerializer(record).data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, pk):
+        record = OfficialAttendanceRecord.objects.filter(id=pk, user=request.user, is_deleted=False).first()
+        if not record:
+            return Response({"status": "error", "message": "Record not found."}, status=status.HTTP_404_NOT_FOUND)
+        record.is_deleted = True
+        record.save()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+

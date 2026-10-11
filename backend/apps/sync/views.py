@@ -14,10 +14,14 @@ from apps.attendance.models import (
     AttendanceEvent,
     AttendanceCorrection,
     PendingSuggestion,
+    OfficialImportBatch,
+    OfficialAttendanceRecord,
 )
 from apps.attendance.serializers import (
     AttendanceSessionSerializer,
     PendingSuggestionSerializer,
+    OfficialImportBatchSerializer,
+    OfficialAttendanceRecordSerializer,
 )
 from apps.activities.models import Activity, ActivityEntry
 from apps.activities.serializers import ActivitySerializer, ActivityEntrySerializer
@@ -70,6 +74,8 @@ class SyncView(APIView):
             'habits': 0,
             'habit_completions': 0,
             'pending_suggestions': 0,
+            'official_attendance_batches': 0,
+            'official_attendance_records': 0,
         }
 
         # 1. Activities upsert
@@ -372,6 +378,78 @@ class SyncView(APIView):
                 sugg.save()
             counts['pending_suggestions'] += 1
 
+        # 10. Official Attendance Batches upsert
+        for batch_data in data.get('official_attendance_batches', []):
+            batch_id = batch_data.get('id')
+            if not batch_id:
+                continue
+            imported_at = parse_dt(batch_data.get('imported_at')) or timezone.now()
+            batch, created = OfficialImportBatch.objects.get_or_create(
+                id=batch_id,
+                user=user,
+                defaults={
+                    'source_filename': batch_data.get('source_filename', 'Official Import'),
+                    'file_hash': batch_data.get('file_hash', ''),
+                    'row_count': batch_data.get('row_count', 0),
+                    'imported_at': imported_at,
+                    'notes': batch_data.get('notes', ''),
+                    'is_deleted': batch_data.get('is_deleted', False),
+                }
+            )
+            if not created:
+                batch.source_filename = batch_data.get('source_filename', batch.source_filename)
+                batch.file_hash = batch_data.get('file_hash', batch.file_hash)
+                batch.row_count = batch_data.get('row_count', batch.row_count)
+                batch.notes = batch_data.get('notes', batch.notes)
+                batch.is_deleted = batch_data.get('is_deleted', batch.is_deleted)
+                batch.save()
+            counts['official_attendance_batches'] += 1
+
+        # 11. Official Attendance Records upsert
+        for rec_data in data.get('official_attendance_records', []):
+            rec_id = rec_data.get('id')
+            batch_id = rec_data.get('batch_id')
+            if not rec_id or not batch_id:
+                continue
+            batch = OfficialImportBatch.objects.filter(id=batch_id, user=user).first()
+            if not batch:
+                continue
+            work_date = parse_date(rec_data.get('work_date'))
+            if not work_date:
+                continue
+            check_in = parse_dt(rec_data.get('check_in_time'))
+            check_out = parse_dt(rec_data.get('check_out_time'))
+            rec, created = OfficialAttendanceRecord.objects.get_or_create(
+                id=rec_id,
+                user=user,
+                defaults={
+                    'batch': batch,
+                    'work_date': work_date,
+                    'check_in_time': check_in,
+                    'check_out_time': check_out,
+                    'break_duration_minutes': rec_data.get('break_duration_minutes', 0),
+                    'total_duration_minutes': rec_data.get('total_duration_minutes', 0),
+                    'source_description': rec_data.get('source_description', ''),
+                    'validation_status': rec_data.get('validation_status', 'VALID'),
+                    'discrepancy_note': rec_data.get('discrepancy_note', ''),
+                    'is_reviewed': bool(rec_data.get('is_reviewed', False)),
+                    'is_deleted': rec_data.get('is_deleted', False),
+                }
+            )
+            if not created:
+                rec.work_date = work_date
+                rec.check_in_time = check_in
+                rec.check_out_time = check_out
+                rec.break_duration_minutes = rec_data.get('break_duration_minutes', rec.break_duration_minutes)
+                rec.total_duration_minutes = rec_data.get('total_duration_minutes', rec.total_duration_minutes)
+                rec.source_description = rec_data.get('source_description', rec.source_description)
+                rec.validation_status = rec_data.get('validation_status', rec.validation_status)
+                rec.discrepancy_note = rec_data.get('discrepancy_note', rec.discrepancy_note)
+                rec.is_reviewed = bool(rec_data.get('is_reviewed', rec.is_reviewed))
+                rec.is_deleted = rec_data.get('is_deleted', rec.is_deleted)
+                rec.save()
+            counts['official_attendance_records'] += 1
+
         total_received = sum(counts.values())
 
         # Record SyncLog
@@ -407,6 +485,12 @@ class SyncView(APIView):
                 ).data,
                 'habit_completions': HabitCompletionSerializer(
                     HabitCompletion.objects.filter(user=user, updated_at__gt=last_sync_dt), many=True
+                ).data,
+                'official_attendance_batches': OfficialImportBatchSerializer(
+                    OfficialImportBatch.objects.filter(user=user, updated_at__gt=last_sync_dt), many=True
+                ).data,
+                'official_attendance_records': OfficialAttendanceRecordSerializer(
+                    OfficialAttendanceRecord.objects.filter(user=user, updated_at__gt=last_sync_dt), many=True
                 ).data,
             }
 

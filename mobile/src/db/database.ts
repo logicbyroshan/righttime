@@ -48,6 +48,14 @@ export function initDatabase(db: SQLite.SQLiteDatabase) {
       [2, new Date().toISOString()]
     );
   }
+
+  if (currentVersion < 3) {
+    applyMigrationV3(db);
+    db.runSync(
+      'INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?);',
+      [3, new Date().toISOString()]
+    );
+  }
 }
 
 function applyMigrationV1(db: SQLite.SQLiteDatabase) {
@@ -268,6 +276,53 @@ function applyMigrationV2(db: SQLite.SQLiteDatabase) {
   if (!eventCols.includes('network_match')) {
     db.execSync("ALTER TABLE attendance_events ADD COLUMN network_match INTEGER DEFAULT 1;");
   }
+}
+
+function applyMigrationV3(db: SQLite.SQLiteDatabase) {
+  db.execSync(`
+    -- Official Attendance Import Batches
+    CREATE TABLE IF NOT EXISTS official_attendance_batches (
+      id TEXT PRIMARY KEY,
+      source_filename TEXT NOT NULL,
+      file_hash TEXT NOT NULL,
+      row_count INTEGER NOT NULL DEFAULT 0,
+      imported_at TEXT NOT NULL,
+      notes TEXT DEFAULT '',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      client_updated_at TEXT NOT NULL,
+      is_deleted INTEGER DEFAULT 0
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_batches_hash ON official_attendance_batches(file_hash);
+
+    -- Official Attendance Records
+    CREATE TABLE IF NOT EXISTS official_attendance_records (
+      id TEXT PRIMARY KEY,
+      batch_id TEXT NOT NULL REFERENCES official_attendance_batches(id) ON DELETE CASCADE,
+      work_date TEXT NOT NULL,
+      check_in_time TEXT,
+      check_out_time TEXT,
+      break_duration_minutes INTEGER DEFAULT 0,
+      total_duration_minutes INTEGER DEFAULT 0,
+      source_description TEXT DEFAULT '',
+      validation_status TEXT NOT NULL DEFAULT 'VALID',
+      discrepancy_note TEXT DEFAULT '',
+      is_reviewed INTEGER DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      client_updated_at TEXT NOT NULL,
+      is_deleted INTEGER DEFAULT 0
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_official_rec_date ON official_attendance_records(work_date);
+    CREATE INDEX IF NOT EXISTS idx_official_rec_batch ON official_attendance_records(batch_id);
+    CREATE INDEX IF NOT EXISTS idx_official_rec_reviewed ON official_attendance_records(is_reviewed);
+
+    -- Tolerance setting
+    INSERT OR IGNORE INTO user_settings (key, value) VALUES
+      ('reconciliation_tolerance_minutes', '5');
+  `);
 }
 
 export function resetDatabase() {

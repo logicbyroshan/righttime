@@ -153,6 +153,7 @@ export interface UserSettings {
   wifi_grace_seconds: string; // e.g. '180'
   wifi_cooldown_minutes: string; // e.g. '15'
   wifi_last_dismissed_arrival: string; // ISO timestamp or ''
+  reconciliation_tolerance_minutes: string; // e.g. '5'
   backend_url: string;
   auth_token: string;
   last_sync_time: string | null;
@@ -169,3 +170,85 @@ export interface SyncQueueItem {
   error_message: string | null;
   created_at: string;
 }
+
+export interface OfficialImportBatch {
+  id: string;
+  source_filename: string;
+  file_hash: string;
+  row_count: number;
+  imported_at: string;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+  client_updated_at: string;
+  is_deleted: number;
+}
+
+export type OfficialValidationStatus = 'VALID' | 'INVALID' | 'CORRECTED' | 'EXCLUDED';
+
+export interface OfficialAttendanceRecord {
+  id: string;
+  batch_id: string;
+  work_date: string; // YYYY-MM-DD
+  check_in_time: string | null; // ISO UTC
+  check_out_time: string | null; // ISO UTC
+  break_duration_minutes: number;
+  total_duration_minutes: number;
+  source_description: string;
+  validation_status: OfficialValidationStatus;
+  discrepancy_note: string;
+  is_reviewed: number; // 0 or 1
+  created_at: string;
+  updated_at: string;
+  client_updated_at: string;
+  is_deleted: number;
+}
+
+export type ReconciliationStatus =
+  | 'MATCH'
+  | 'ARRIVAL_DISCREPANCY'
+  | 'DEPARTURE_DISCREPANCY'
+  | 'DURATION_DISCREPANCY'
+  | 'PERSONAL_MISSING'
+  | 'OFFICIAL_MISSING'
+  | 'INCOMPLETE_PERSONAL'
+  | 'AMBIGUOUS'
+  | 'INVALID_OFFICIAL'
+  | 'REVIEWED';
+
+export interface ReconciliationItem {
+  date: string;
+  weekday: string;
+  personalArrival: string | null;
+  personalDeparture: string | null;
+  personalGrossMinutes: number;
+  personalBreakMinutes: number;
+  personalNetMinutes: number;
+  personalSource: string;
+  personalIsIncomplete: boolean;
+  personalIsCorrected: boolean;
+  officialRecordId: string | null;
+  officialArrival: string | null;
+  officialDeparture: string | null;
+  officialBreakMinutes: number;
+  officialNetMinutes: number;
+  arrivalDiffMinutes: number | null; // personalArrival - officialArrival
+  departureDiffMinutes: number | null; // personalDeparture - officialDeparture
+  netDurationDiffMinutes: number | null; // personalNet - officialNet
+  status: ReconciliationStatus;
+  isReviewed: boolean;
+  discrepancyNote: string;
+}
+
+export interface ReconciliationSummary {
+  periodStart: string;
+  periodEnd: string;
+  totalDays: number;
+  matchedDays: number;
+  discrepancyDays: number;
+  missingPersonalDays: number;
+  missingOfficialDays: number;
+  reviewedDays: number;
+  toleranceMinutes: number;
+}
+

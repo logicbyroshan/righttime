@@ -178,3 +178,45 @@ class PendingSuggestion(BaseModel):
 
     def __str__(self):
         return f"Suggestion {self.event_type} ({self.status}) for {self.user.username}"
+
+
+class OfficialImportBatch(BaseModel):
+    source_filename = models.CharField(max_length=255)
+    file_hash = models.CharField(max_length=128, db_index=True)
+    row_count = models.PositiveIntegerField(default=0)
+    imported_at = models.DateTimeField(default=timezone.now)
+    notes = models.TextField(blank=True, default='')
+
+    class Meta:
+        ordering = ['-imported_at']
+
+    def __str__(self):
+        return f"Batch {self.source_filename} ({self.imported_at.date()})"
+
+
+class OfficialAttendanceRecord(BaseModel):
+    batch = models.ForeignKey(
+        OfficialImportBatch,
+        on_delete=models.CASCADE,
+        related_name='records'
+    )
+    work_date = models.DateField(db_index=True)
+    check_in_time = models.DateTimeField(null=True, blank=True)
+    check_out_time = models.DateTimeField(null=True, blank=True)
+    break_duration_minutes = models.PositiveIntegerField(default=0)
+    total_duration_minutes = models.PositiveIntegerField(default=0)
+    source_description = models.CharField(max_length=255, blank=True, default='')
+    validation_status = models.CharField(max_length=32, default='VALID')
+    discrepancy_note = models.TextField(blank=True, default='')
+    is_reviewed = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ['work_date', 'check_in_time']
+        indexes = [
+            models.Index(fields=['user', 'work_date']),
+            models.Index(fields=['user', 'is_reviewed']),
+        ]
+
+    def __str__(self):
+        return f"Official {self.work_date} ({self.validation_status}) for {self.user.username}"
+
