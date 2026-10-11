@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.1] - 2026-10-11
+
+### Added
+- **Mandatory Git Branching & GitHub PR Workflow**:
+  - Enforced isolated task branching (`feature/*`, `fix/*`, `docs/*`, `chore/*`) for all future tasks.
+  - Required Pull Request creation and merging via GitHub CLI (`gh pr create`, `gh pr merge --merge`).
+  - Added project-specific operating instructions in `AGENTS.md` and `.agent-memory/CONVENTIONS.md`.
+  - Added ADR-007 in `.agent-memory/DECISIONS.md`.
+
+---
+
 ## [1.0.0] - 2026-10-11
 
 ### Added

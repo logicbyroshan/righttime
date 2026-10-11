@@ -156,8 +156,53 @@ npm run android
 - **DO NOT** implement fake or nonfunctional UI buttons for future Phase 2 features (keep them clearly marked inactive or out of navigation).
 - **DO NOT** delete local records simply because synchronization fails.
 - **DO NOT** fabricate checkout times for incomplete sessions.
-- **DO NOT** commit `.venv/`, `node_modules/`, `db.sqlite3`, or build artifacts to Git.
 - **DO NOT** waste tokens reading the entire repository when a targeted file inspection is sufficient.
+- **DO NOT** commit or push directly to `main`. Always follow the branching and PR workflow below.
+
+---
+
+## 8. Mandatory Git Branching & GitHub PR Workflow
+
+**RULE**: Never push code directly to `main`. Every task, feature, bug fix, or documentation update must be executed in an isolated branch and merged via a Pull Request using the GitHub CLI (`gh`).
+
+### Step-by-Step Task Execution Protocol:
+1. **Branch Out from Updated Main**:
+   ```powershell
+   git checkout main
+   git pull origin main
+   git checkout -b <prefix>/<short-task-name>
+   ```
+   Branch naming conventions:
+   - `feature/<name>` for new features or enhancements
+   - `fix/<name>` for bug fixes or corrections
+   - `docs/<name>` for documentation or memory updates
+   - `chore/<name>` for tooling, dependencies, or configuration
+2. **Execute Work & Test**:
+   - Implement the minimal necessary change.
+   - Run backend tests: `cd backend; python manage.py test`.
+   - Run mobile tests: `cd mobile; npm test`.
+   - Run TypeScript check: `cd mobile; npx tsc --noEmit`.
+3. **Commit Changes**:
+   - Stage affected files: `git add <files>`
+   - Commit with conventional message: `git commit -m "<type>: <description>"`
+4. **Push Branch to Remote**:
+   ```powershell
+   git push -u origin <branch-name>
+   ```
+5. **Create Pull Request via GitHub CLI (`gh`)**:
+   ```powershell
+   gh pr create --title "<Title>" --body "<Detailed description of changes and test results>"
+   ```
+6. **Merge Pull Request via GitHub CLI**:
+   ```powershell
+   gh pr merge --merge --delete-branch
+   ```
+7. **Return to Main & Synchronize**:
+   ```powershell
+   git checkout main
+   git pull origin main
+   ```
+8. **Next Task**: Start each new task on a fresh separate branch branched from the freshly updated `main`.
 
 ---
 
